@@ -1,77 +1,75 @@
-import pickle
-
-import os
-
-os.makedirs("models", exist_ok=True)
-
-with open("models/apriori_rules.pkl", "wb") as f:
-
-|
-
-pickle.dump(rules, f)
-
-Astou Leye
-23 h 57
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-st.title("📈 Analyse descriptive des données e-commerce")
+def run_analyse_descriptive(df):
+    """Affiche l'analyse brute, puis propose le nettoyage"""
+    
+    # --- TITRE DE LA SECTION ---
+    st.markdown("### 📋 Exploration des données brutes (Avant nettoyage)")
+    st.write("Cette étape permet d'identifier la qualité initiale de votre fichier CSV/Excel.")
 
-st.markdown("""
-Cette page permet d’explorer la base de données e-commerce
-avant l’application des modèles de Data Mining.
-""")
+    # --- 1. INDICATEURS DE STRUCTURE ---
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Lignes totales", f"{df.shape[0]:,}")
+    with col2:
+        st.metric("Colonnes", df.shape[1])
+    with col3:
+        # On vérifie si les colonnes nécessaires existent pour le C.A.
+        if "UnitPrice" in df.columns and "Quantity" in df.columns:
+            ca_brut = (df["UnitPrice"] * df["Quantity"]).sum()
+            st.metric("Valeur Brute Totale", f"{ca_brut:,.0f} €")
 
-# Upload du fichier
-uploaded_file = st.file_uploader(
-    "📂 Charger la base de données (CSV ou Excel)",
-    type=["csv", "xlsx"]
-)
+    st.divider()
 
-if uploaded_file is not None:
+    # --- 2. IDENTIFICATION DES ANOMALIES ---
+    st.subheader("⚠️ Diagnostic de la base")
+    
+    # Calcul des erreurs potentielles
+    neg_qty = df[df['Quantity'] < 0].shape[0] if 'Quantity' in df.columns else 0
+    neg_price = df[df['UnitPrice'] < 0].shape[0] if 'UnitPrice' in df.columns else 0
+    missing_cust = df['CustomerID'].isnull().sum() if 'CustomerID' in df.columns else 0
+    doublons = df.duplicated().sum()
 
-    # Lecture du fichier
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.error(f"Retours/Négatifs\n\n**{neg_qty}**")
+    c2.error(f"Prix aberrants\n\n**{neg_price}**")
+    c3.warning(f"Clients inconnus\n\n**{missing_cust}**")
+    c4.warning(f"Doublons\n\n**{doublons}**")
 
-    st.success("Base de données chargée avec succès")
+    # --- 3. DISTRIBUTIONS BRUTES ---
+    st.subheader("📊 Visualisation des écarts (Boxplots)")
+    col_x, col_y = st.columns(2)
+    
+    with col_x:
+        if 'Quantity' in df.columns:
+            fig, ax = plt.subplots(figsize=(5, 2))
+            sns.boxplot(x=df['Quantity'], color='#1e3a8a', ax=ax)
+            ax.set_title("Dispersion des Quantités")
+            st.pyplot(fig)
 
-    # Aperçu
-    st.subheader("🔍 Aperçu des données")
-    st.dataframe(df.head())
+    with col_y:
+        if 'UnitPrice' in df.columns:
+            fig, ax = plt.subplots(figsize=(5, 2))
+            sns.boxplot(x=df['UnitPrice'], color='#ef4444', ax=ax)
+            ax.set_title("Dispersion des Prix")
+            st.pyplot(fig)
 
-    # Dimensions
-    st.subheader("📐 Dimensions de la base")
-    st.write(f"Nombre de lignes : {df.shape[0]}")
-    st.write(f"Nombre de colonnes : {df.shape[1]}")
+    # --- 4. STATISTIQUES ET APERÇU ---
+    with st.expander("📂 Voir les statistiques descriptives complètes"):
+        st.dataframe(df.describe(), use_container_width=True)
+    
+    st.divider()
 
-    # Types de données
-    st.subheader("📊 Types des variables")
-    st.dataframe(df.dtypes)
-
-    # Statistiques descriptives
-    st.subheader("📉 Statistiques descriptives")
-    st.dataframe(df.describe())
-
-    # Visualisation simple
-    if "Quantity" in df.columns:
-        st.subheader("📦 Distribution des quantités")
-        plt.figure()
-        df["Quantity"].hist(bins=30)
-        plt.xlabel("Quantité")
-        plt.ylabel("Fréquence")
-        st.pyplot(plt)
-
-    if "UnitPrice" in df.columns:
-        st.subheader("💰 Distribution des prix unitaires")
-        plt.figure()
-        df["UnitPrice"].hist(bins=30)
-        plt.xlabel("Prix unitaire")
-        plt.ylabel("Fréquence")
-        st.pyplot(plt)
-
-else:
-    st.warning("Veuillez charger un fichier pour commencer l’analyse.")
+    # --- 5. BOUTON POUR PASSER À L'ANALYSE NETTOYÉE ---
+    st.subheader("🚀 Analyse Décisionnelle (Données filtrées)")
+    if st.checkbox("Cliquer ici pour nettoyer les données et voir l'analyse pertinente"):
+        # Nettoyage
+        df_clean = df[(df['Quantity'] > 0) & (df['UnitPrice'] > 0)].drop_duplicates().copy()
+        
+        st.success(f"Données nettoyées ! Il reste {df_clean.shape[0]:,} lignes valides.")
+        
+        # Ici on peut ajouter les graphiques pertinents (Top 10, Pays, etc.)
+        st.bar_chart(df_clean['Description'].value_counts().head(10))
